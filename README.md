@@ -10,7 +10,7 @@
 
 Aplicação web desenvolvida como **Projeto Aplicado** da pós-graduação em **Arquitetura de Software e Inteligência Artificial**. O projeto evolui o Sistema Continental para permitir a consulta de vendas no ERP Oracle da matriz e a geração de planilhas Excel utilizadas no processo operacional de precificação.
 
-O problema, os requisitos de negócio e as metas aqui descritas estão alinhados ao [relatório do Projeto Aplicado](Template%20-%20Relat%C3%B3rio%20do%20Projeto%20Aplicado%20Atual.docx), incluído na raiz do repositório.
+O problema, os requisitos de negócio e as metas aqui descritas estão alinhados ao [relatório do Projeto Aplicado](Relat%C3%B3rio%20do%20Projeto%20Aplicado%20-%20Francisco%20Gleidson%20da%20Silva%20Freitas.pdf), incluído na raiz do repositório.
 
 ## Navegação
 
@@ -190,4 +190,4 @@ Configure a coleta e retenção dos logs no ambiente de homologação, sem regis
 
 ## Documento do Projeto Aplicado
 
-O arquivo [Template - Relatório do Projeto Aplicado Atual.docx](Template%20-%20Relat%C3%B3rio%20do%20Projeto%20Aplicado%20Atual.docx) reúne o contexto do negócio, as personas, o levantamento de requisitos, o planejamento em sprints e as evidências descritas no relatório. Ele complementa este README; resultados de homologação, metas e desempenho devem ser interpretados conforme as evidências e o ambiente documentados nele.
+O arquivo [Relatório do Projeto Aplicado - Francisco Gleidson da Silva Freitas.pdf](Relat%C3%B3rio%20do%20Projeto%20Aplicado%20-%20Francisco%20Gleidson%20da%20Silva%20Freitas.pdf) reúne o contexto do negócio, as personas, o levantamento de requisitos, o planejamento em sprints e as evidências descritas no relatório. Ele complementa este README; resultados de homologação, metas e desempenho devem ser interpretados conforme as evidências e o ambiente documentados nele.
