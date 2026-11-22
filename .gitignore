@@ -1,0 +1,46 @@
+# Build output
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Ll]ogs/
+*.log
+artifacts/
+TestResults/
+[Bb]enchmarkDotNet.Artifacts/
+
+# Visual Studio and editors
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# NuGet packages and local tools
+packages/
+*.nupkg
+*.snupkg
+
+# Publish output and local publish profiles
+publish/
+*.pubxml.user
+
+# Local configuration and secrets
+appsettings.Local.json
+appsettings.*.local.json
+secrets.json
+.env
+.env.*
+!.env.example
+
+# JavaScript dependencies and generated assets
+node_modules/
+
+# Local databases and operating system files
+*.mdf
+*.ldf
+*.sqlite
+*.sqlite3
+.DS_Store
+Thumbs.db

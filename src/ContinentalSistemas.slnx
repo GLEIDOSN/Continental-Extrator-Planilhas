@@ -1,0 +1,13 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="ContinentalSistemas.App/ContinentalSistemas.App.csproj" />
+    <Project Path="ContinentalSistemas.Application/ContinentalSistemas.Application.csproj" />
+    <Project Path="ContinentalSistemas.Data/ContinentalSistemas.Data.csproj" />
+    <Project Path="ContinentalSistemas.Domain/ContinentalSistemas.Domain.csproj" />
+    <Project Path="ContinentalSistemas.Ioc/ContinentalSistemas.Ioc.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="../tests/ContinentalSistemas.Application.tests/ContinentalSistemas.Application.tests.csproj" Id="243df4bf-d590-4651-93f1-b6dbb5203035" />
+    <Project Path="../tests/ContinentalSistemas.Data.tests/ContinentalSistemas.Data.tests.csproj" Id="0c545cba-142f-4da5-bf9e-b31416344795" />
+  </Folder>
+</Solution>
