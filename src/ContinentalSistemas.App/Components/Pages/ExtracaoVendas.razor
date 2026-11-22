@@ -1,8 +1,11 @@
 @page "/extracao-vendas"
 @attribute [Authorize]
 @using System.Globalization
+@using System.Diagnostics
+@using ContinentalSistemas.App.Diagnostics
 @using ContinentalSistemas.Application.Dtos
 @using ContinentalSistemas.Application.Interfaces.Services
+@inject MonitorCircuito MonitorCircuito
 @inject IExtracaoVendasService ExtracaoService
 @inject IConfiguration Configuration
 @inject IJSRuntime JS
@@ -123,6 +126,7 @@
     private string? erro;
     private bool ocupado;
     private bool consultado;
+    private string? extracaoId;
 
     private void LimparResultado()
     {
@@ -130,6 +134,7 @@
         inexistentes = [];
         erro = null;
         consultado = false;
+        extracaoId = null;
     }
 
     private async Task ConsultarAsync()
@@ -173,15 +178,23 @@
 
         ocupado = true;
         StateHasChanged();
+        extracaoId = Guid.NewGuid().ToString("N");
+        using var escopo = Logger.BeginScope("ExtracaoId={ExtracaoId} CircuitoId={CircuitoId}", extracaoId, MonitorCircuito.Id);
+        var cronometro = Stopwatch.StartNew();
+        var resultado = "Erro";
         try
         {
             var servidor = new ServidorDto { Descricao = "Winthor", Ip = host.Trim(), Ativo = true };
             inexistentes = await ExtracaoService.ObterNumerosVendasInexistentesAsync(servidor, numeros);
             if (inexistentes.Count > 0)
+            {
+                resultado = "VendasInexistentes";
                 return;
+            }
 
             itens = await ExtracaoService.ExtrairItensVendasPorEcfAsync(servidor, numeros);
             consultado = true;
+            resultado = "Sucesso";
         }
         catch (Exception ex)
         {
@@ -190,6 +203,8 @@
         }
         finally
         {
+            Logger.LogInformation("Desempenho consulta: extracaoId={ExtracaoId}, circuitoId={CircuitoId}, vendas={QuantidadeVendas}, itens={QuantidadeItens}, inexistentes={QuantidadeInexistentes}, duracaoMs={DuracaoMs}, resultado={Resultado}",
+                extracaoId, MonitorCircuito.Id, numeros.Count, itens.Count, inexistentes.Count, cronometro.Elapsed.TotalMilliseconds, resultado);
             ocupado = false;
         }
     }
@@ -211,15 +226,31 @@
 
         ocupado = true;
         erro = null;
+        var id = extracaoId;
+        var quantidadeItens = itens.Count;
+        using var escopo = Logger.BeginScope("ExtracaoId={ExtracaoId} CircuitoId={CircuitoId}", id, MonitorCircuito.Id);
+        var cronometro = Stopwatch.StartNew();
+        double? geracaoMs = null;
+        double? transferenciaMs = null;
+        var tamanhoBytes = 0;
+        var sucesso = false;
+        RegistrarMemoria("AntesExportacao", id);
         try
         {
             var nomeComplemento = string.Join("_", complemento.Trim().Split(Path.GetInvalidFileNameChars()));
             var nome = $"{nomeComplemento}_Winthor_{dataArquivo.Value.ToString("dd.MM.yyyy", CultureInfo.InvariantCulture)}.xls";
+            var etapa = Stopwatch.StartNew();
             var bytes = ExtracaoService.GerarPlanilhaExcel(itens);
+            geracaoMs = etapa.Elapsed.TotalMilliseconds;
+            tamanhoBytes = bytes.Length;
+            RegistrarMemoria("DepoisGeracao", id);
             using var stream = new MemoryStream(bytes);
             using var streamReference = new DotNetStreamReference(stream);
+            etapa.Restart();
             await using var module = await JS.InvokeAsync<IJSObjectReference>("import", "./js/extracao-vendas.js");
             await module.InvokeVoidAsync("baixarPlanilha", nome, streamReference);
+            transferenciaMs = etapa.Elapsed.TotalMilliseconds;
+            sucesso = true;
 
             empresa = string.Empty;
             dataArquivo = null;
@@ -234,7 +265,24 @@
         }
         finally
         {
+            RegistrarMemoria("FimExportacao", id);
+            Logger.LogInformation("Desempenho exportacao: extracaoId={ExtracaoId}, circuitoId={CircuitoId}, itens={QuantidadeItens}, bytes={TamanhoBytes}, geracaoMs={GeracaoMs}, transferenciaMs={TransferenciaMs}, duracaoMs={DuracaoMs}, sucesso={Sucesso}",
+                id, MonitorCircuito.Id, quantidadeItens, tamanhoBytes, geracaoMs, transferenciaMs, cronometro.Elapsed.TotalMilliseconds, sucesso);
             ocupado = false;
+        }
+    }
+
+    private void RegistrarMemoria(string etapa, string? id)
+    {
+        try
+        {
+            using var processo = Process.GetCurrentProcess();
+            Logger.LogInformation("Memoria exportacao: extracaoId={ExtracaoId}, circuitoId={CircuitoId}, etapa={Etapa}, processoId={ProcessoId}, memoriaPrivadaBytes={MemoriaPrivadaBytes}, workingSetBytes={WorkingSetBytes}, gerenciadaBytes={GerenciadaBytes}",
+                id, MonitorCircuito.Id, etapa, processo.Id, processo.PrivateMemorySize64, processo.WorkingSet64, GC.GetTotalMemory(false));
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception or NotSupportedException)
+        {
+            Logger.LogWarning(ex, "Não foi possível medir a memória do processo na etapa {Etapa}.", etapa);
         }
     }
 }

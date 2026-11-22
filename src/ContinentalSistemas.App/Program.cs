@@ -1,8 +1,10 @@
 using ContinentalSistemas.App.Components;
 using ContinentalSistemas.App.Components.Account;
 using ContinentalSistemas.App.Data;
+using ContinentalSistemas.App.Diagnostics;
 using ContinentalSistemas.Ioc;
 using Microsoft.AspNetCore.Components.Authorization;
+using Microsoft.AspNetCore.Components.Server.Circuits;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
@@ -11,6 +13,8 @@ var builder = WebApplication.CreateBuilder(args);
 // Add services to the container.
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
+builder.Services.AddScoped<MonitorCircuito>();
+builder.Services.AddScoped<CircuitHandler>(services => services.GetRequiredService<MonitorCircuito>());
 
 builder.Services.AddConfigureServices();
 builder.Services.AddInfrastructure(builder.Configuration);
