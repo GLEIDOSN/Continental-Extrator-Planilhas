@@ -1,0 +1,7 @@
+<Solution>
+  <Project Path="src/ContinentalSistemas.App/ContinentalSistemas.App.csproj" />
+  <Project Path="src/ContinentalSistemas.Application/ContinentalSistemas.Application.csproj" />
+  <Project Path="src/ContinentalSistemas.Data/ContinentalSistemas.Data.csproj" />
+  <Project Path="src/ContinentalSistemas.Domain/ContinentalSistemas.Domain.csproj" />
+  <Project Path="src/ContinentalSistemas.Ioc/ContinentalSistemas.Ioc.csproj" />
+</Solution>

@@ -1,0 +1,23 @@
+﻿@using ContinentalSistemas.App.Components.Account.Shared
+<Router AppAssembly="typeof(Program).Assembly" NotFoundPage="typeof(Pages.NotFound)">
+    <Found Context="routeData">
+        @if (routeData.PageType == typeof(ContinentalSistemas.App.Components.Account.Pages.Login))
+        {
+            <RouteView RouteData="routeData" DefaultLayout="typeof(Layout.MainLayout)" />
+        }
+        else if (routeData.PageType == typeof(ContinentalSistemas.App.Components.Pages.Home) ||
+                 routeData.PageType == typeof(ContinentalSistemas.App.Components.Pages.ExtracaoVendas))
+        {
+            <AuthorizeRouteView RouteData="routeData" DefaultLayout="typeof(Layout.MainLayout)">
+                <NotAuthorized>
+                    <RedirectToLogin />
+                </NotAuthorized>
+            </AuthorizeRouteView>
+        }
+        else
+        {
+            <ContinentalSistemas.App.Components.Pages.NotFound />
+        }
+        <FocusOnNavigate RouteData="routeData" Selector="h1" />
+    </Found>
+</Router>

@@ -1,0 +1,240 @@
+@page "/extracao-vendas"
+@attribute [Authorize]
+@using System.Globalization
+@using ContinentalSistemas.Application.Dtos
+@using ContinentalSistemas.Application.Interfaces.Services
+@inject IExtracaoVendasService ExtracaoService
+@inject IConfiguration Configuration
+@inject IJSRuntime JS
+@inject ILogger<ExtracaoVendas> Logger
+@rendermode InteractiveServer
+
+<PageTitle>Extração de vendas</PageTitle>
+
+<h1 class="h4 mb-4">Extração de Planilhas de Vendas</h1>
+
+<div class="row g-3">
+    <div class="col-12 col-xl-4">
+        <section class="card shadow-sm h-100">
+            <div class="card-header bg-dark text-white fw-semibold">Parâmetros da extração</div>
+            <div class="card-body">
+                <fieldset disabled="@ocupado">
+                    <div class="mb-3">
+                        <label for="empresa" class="form-label">Loja / Servidor de destino <span class="text-danger">*</span></label>
+                        <select id="empresa" class="form-select" @bind="empresa" @bind:after="LimparResultado">
+                            <option value="">Selecione uma loja</option>
+                            <option value="Winthor">Winthor</option>
+                        </select>
+                        <div class="form-text">Base onde a consulta de vendas será executada.</div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="dataArquivo" class="form-label">Data do arquivo <span class="text-danger">*</span></label>
+                        <input id="dataArquivo" class="form-control" type="date" @bind="dataArquivo" />
+                        <div class="form-text">Utilizada no nome do arquivo, não como filtro da consulta.</div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="complemento" class="form-label">Complemento do nome do arquivo <span class="text-danger">*</span></label>
+                        <input id="complemento" class="form-control" maxlength="60" placeholder="Ex.: Loja Nova" @bind="complemento" @bind:event="oninput" />
+                        <div class="form-text">Obrigatório para compor o nome do arquivo Excel.</div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="numeros" class="form-label">Números das vendas <span class="text-danger">*</span></label>
+                        <textarea id="numeros" class="form-control" rows="6" placeholder="Ex.: 32418, 32428, 3243" @bind="numerosTexto" @bind:event="oninput" @bind:after="LimparResultado"></textarea>
+                        <div class="form-text">Separe os números por vírgula, ponto e vírgula, espaço ou quebra de linha (até 1.000 vendas).</div>
+                    </div>
+                    <button type="button" class="btn btn-primary w-100 mb-2" disabled="@ocupado" @onclick="ConsultarAsync">
+                        @if (ocupado)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                            <span>Consultando Oracle...</span>
+                        }
+                        else
+                        {
+                            <span>Consultar</span>
+                        }
+                    </button>
+                    <button type="button" class="btn btn-success w-100" disabled="@(ocupado || itens.Count == 0 || !dataArquivo.HasValue || string.IsNullOrWhiteSpace(complemento))" @onclick="ExportarAsync">Exportar para planilha (.xls)</button>
+                </fieldset>
+                @if (!string.IsNullOrEmpty(erro))
+                {
+                    <div class="alert alert-danger mt-3 mb-0" role="alert">@erro</div>
+                }
+                @if (inexistentes.Count > 0)
+                {
+                    <div class="alert alert-warning mt-3 mb-0" role="alert">Vendas não encontradas ou canceladas: @string.Join(", ", inexistentes). Nenhuma planilha foi gerada.</div>
+                }
+            </div>
+        </section>
+    </div>
+    <div class="col-12 col-xl-8">
+        <section class="card shadow-sm h-100">
+            <div class="card-header bg-white fw-semibold d-flex justify-content-between align-items-center">
+                <span>Pré-visualização do resultado</span>
+                @if (itens.Count > 0)
+                {
+                    <span class="badge bg-success">@itens.Count registro(s) encontrado(s)</span>
+                }
+            </div>
+            <div class="card-body p-0">
+                @if (ocupado && itens.Count == 0)
+                {
+                    <div class="text-muted text-center p-5"><span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Consultando vendas...</div>
+                }
+                else if (itens.Count == 0)
+                {
+                    <div class="text-muted text-center p-5">@(consultado ? "Nenhum item encontrado para as vendas informadas." : "Informe os parâmetros e clique em Consultar.")</div>
+                }
+                else
+                {
+                    <div class="table-responsive resultado">
+                        <table class="table table-striped table-hover table-sm align-middle mb-0">
+                            <thead class="table-light">
+                                <tr><th>PRO_CODIGO</th><th>COD_R3MAGAZINE</th><th>PRO_DESCRICAO</th><th>PRO_REFERENCIA</th><th class="text-end">QUANTIDADE</th><th>VENDA</th><th class="text-end">CUSTO</th><th class="text-end">PRECO_LOJA</th><th class="text-end">CUSTO_TOTAL</th></tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var item in itens)
+                                {
+                                    <tr>
+                                        <td>@item.ProCodigo</td><td>@item.CodR3Magazine</td><td>@item.ProDescricao</td><td>@item.ProReferencia</td>
+                                        <td class="text-end">@item.Quantidade.ToString("N0", cultura)</td><td>@item.Venda</td>
+                                        <td class="text-end">@item.Custo.ToString("C", cultura)</td><td class="text-end">@((0m).ToString("C", cultura))</td><td class="text-end">@item.CustoTotal.ToString("C", cultura)</td>
+                                    </tr>
+                                }
+                            </tbody>
+                            <tfoot class="table-light fw-semibold">
+                                <tr><td colspan="4">Total consolidado</td><td class="text-end">@itens.Sum(i => i.Quantidade).ToString("N0", cultura)</td><td colspan="3"></td><td class="text-end">@itens.Sum(i => i.CustoTotal).ToString("C", cultura)</td></tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                }
+            </div>
+        </section>
+    </div>
+</div>
+
+@code {
+    private static readonly CultureInfo cultura = CultureInfo.GetCultureInfo("pt-BR");
+    private string empresa = "Winthor";
+    private DateTime? dataArquivo;
+    private string complemento = string.Empty;
+    private string numerosTexto = string.Empty;
+    private List<ExtracaoVendaItemDto> itens = [];
+    private List<long> inexistentes = [];
+    private string? erro;
+    private bool ocupado;
+    private bool consultado;
+
+    private void LimparResultado()
+    {
+        itens = [];
+        inexistentes = [];
+        erro = null;
+        consultado = false;
+    }
+
+    private async Task ConsultarAsync()
+    {
+        LimparResultado();
+        if (empresa != "Winthor" || !dataArquivo.HasValue)
+        {
+            erro = "Selecione a loja e informe a data do arquivo.";
+            return;
+        }
+        if (string.IsNullOrWhiteSpace(complemento))
+        {
+            erro = "Informe o complemento do nome do arquivo.";
+            return;
+        }
+
+        var partes = numerosTexto.Split([',', ';', ' ', '\r', '\n', '\t'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var numeros = new List<long>();
+        foreach (var parte in partes)
+        {
+            if (!long.TryParse(parte, NumberStyles.None, CultureInfo.InvariantCulture, out var numero) || numero <= 0)
+            {
+                erro = "Informe somente números de vendas inteiros e positivos.";
+                return;
+            }
+            numeros.Add(numero);
+        }
+        numeros = numeros.Distinct().ToList();
+        if (numeros.Count == 0 || numeros.Count > 1000)
+        {
+            erro = "Informe entre 1 e 1.000 números de vendas distintos.";
+            return;
+        }
+
+        var host = Configuration["WinthorOracle:Host"];
+        if (string.IsNullOrWhiteSpace(host))
+        {
+            erro = "Configure WinthorOracle:Host com o endereço do servidor Oracle antes de consultar.";
+            return;
+        }
+
+        ocupado = true;
+        StateHasChanged();
+        try
+        {
+            var servidor = new ServidorDto { Descricao = "Winthor", Ip = host.Trim(), Ativo = true };
+            inexistentes = await ExtracaoService.ObterNumerosVendasInexistentesAsync(servidor, numeros);
+            if (inexistentes.Count > 0)
+                return;
+
+            itens = await ExtracaoService.ExtrairItensVendasPorEcfAsync(servidor, numeros);
+            consultado = true;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Erro ao consultar vendas no Winthor.");
+            erro = "Não foi possível consultar as vendas no Winthor. Verifique a conexão e consulte os registros da aplicação.";
+        }
+        finally
+        {
+            ocupado = false;
+        }
+    }
+
+    private async Task ExportarAsync()
+    {
+        if (ocupado || itens.Count == 0)
+            return;
+        if (empresa != "Winthor" || !dataArquivo.HasValue || string.IsNullOrWhiteSpace(complemento))
+        {
+            erro = "Selecione a loja e informe a data e o complemento do nome do arquivo.";
+            return;
+        }
+        if (itens.Count > 65535)
+        {
+            erro = "O formato XLS permite no máximo 65.535 itens por planilha. Reduza a quantidade de vendas consultadas.";
+            return;
+        }
+
+        ocupado = true;
+        erro = null;
+        try
+        {
+            var nomeComplemento = string.Join("_", complemento.Trim().Split(Path.GetInvalidFileNameChars()));
+            var nome = $"{nomeComplemento}_Winthor_{dataArquivo.Value.ToString("dd.MM.yyyy", CultureInfo.InvariantCulture)}.xls";
+            var bytes = ExtracaoService.GerarPlanilhaExcel(itens);
+            using var stream = new MemoryStream(bytes);
+            using var streamReference = new DotNetStreamReference(stream);
+            await using var module = await JS.InvokeAsync<IJSObjectReference>("import", "./js/extracao-vendas.js");
+            await module.InvokeVoidAsync("baixarPlanilha", nome, streamReference);
+
+            empresa = string.Empty;
+            dataArquivo = null;
+            complemento = string.Empty;
+            numerosTexto = string.Empty;
+            LimparResultado();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Erro ao exportar planilha de vendas.");
+            erro = "Não foi possível exportar a planilha. Consulte os registros da aplicação.";
+        }
+        finally
+        {
+            ocupado = false;
+        }
+    }
+}

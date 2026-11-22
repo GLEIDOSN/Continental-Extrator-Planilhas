@@ -1,0 +1,21 @@
+.resultado {
+    max-height: 65vh;
+    overflow: auto;
+}
+
+.resultado thead th {
+    position: sticky;
+    top: 0;
+    white-space: nowrap;
+    z-index: 1;
+}
+
+.resultado tfoot td {
+    position: sticky;
+    bottom: 0;
+}
+
+.resultado td,
+.resultado th {
+    padding: 0.6rem;
+}
