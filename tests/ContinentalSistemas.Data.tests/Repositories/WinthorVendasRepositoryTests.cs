@@ -2,6 +2,7 @@ using ContinentalSistemas.Application.Dtos;
 using ContinentalSistemas.Data.Repositories;
 using ContinentalSistemas.Data.WinthorQueries;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace ContinentalSistemas.Data.tests.Repositories;
 
@@ -113,6 +114,6 @@ public class WinthorVendasRepositoryTests
     private static WinthorVendasRepository CriarRepositorio(Dictionary<string, string?> configuracao)
     {
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(configuracao).Build();
-        return new WinthorVendasRepository(configuration);
+        return new WinthorVendasRepository(configuration, NullLogger<WinthorVendasRepository>.Instance);
     }
 }

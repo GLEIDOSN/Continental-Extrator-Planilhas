@@ -1,8 +1,11 @@
 @page "/extracao-vendas"
 @attribute [Authorize]
 @using System.Globalization
+@using System.Diagnostics
+@using ContinentalSistemas.App.Diagnostics
 @using ContinentalSistemas.Application.Dtos
 @using ContinentalSistemas.Application.Interfaces.Services
+@inject MonitorCircuito MonitorCircuito
 @inject IExtracaoVendasService ExtracaoService
 @inject IConfiguration Configuration
 @inject IJSRuntime JS
@@ -112,6 +115,35 @@
     </div>
 </div>
 
+@if (!ocupado && (diagnosticoConsulta is not null || erroDiagnostico is not null))
+{
+    <section class="card shadow-sm mt-3" aria-live="polite" aria-labelledby="titulo-diagnostico">
+        <div class="card-header bg-dark text-white fw-semibold d-flex justify-content-between align-items-center">
+            <span id="titulo-diagnostico">Diagnóstico da consulta (Debug)</span>
+            <button type="button" class="btn btn-sm btn-outline-light" @onclick="FecharDiagnostico">Fechar</button>
+        </div>
+        <div class="card-body">
+            @if (diagnosticoConsulta is { } diagnostico)
+            {
+                <dl class="row mb-2">
+                    <dt class="col-sm-4">Resultado</dt><dd class="col-sm-8">@diagnostico.Resultado</dd>
+                    <dt class="col-sm-4">Início</dt><dd class="col-sm-8">@diagnostico.Inicio.Instante.ToString("dd/MM/yyyy HH:mm:ss.fff", cultura)</dd>
+                    <dt class="col-sm-4">Fim</dt><dd class="col-sm-8">@diagnostico.Fim.Instante.ToString("dd/MM/yyyy HH:mm:ss.fff", cultura)</dd>
+                    <dt class="col-sm-4">Tempo decorrido</dt><dd class="col-sm-8">@diagnostico.Duracao.TotalMilliseconds.ToString("N2", cultura) ms</dd>
+                    <dt class="col-sm-4">CPU do processo</dt><dd class="col-sm-8">@diagnostico.CpuPercentual.ToString("N2", cultura)% em média; @diagnostico.Cpu.TotalMilliseconds.ToString("N2", cultura) ms de processamento</dd>
+                    <dt class="col-sm-4">Memória privada</dt><dd class="col-sm-8">@EmMebibytes(diagnostico.Inicio.MemoriaPrivada) MiB no início; @EmMebibytes(diagnostico.Fim.MemoriaPrivada) MiB no fim</dd>
+                    <dt class="col-sm-4">Memória residente (working set)</dt><dd class="col-sm-8">@EmMebibytes(diagnostico.Inicio.WorkingSet) MiB no início; @EmMebibytes(diagnostico.Fim.WorkingSet) MiB no fim</dd>
+                </dl>
+                <p class="text-muted mb-0">CPU e memória referem-se ao processo servidor inteiro, incluindo outras atividades e usuários. A CPU média é normalizada pelo número de processadores lógicos; as amostras de memória não representam necessariamente o pico. A duração inclui a consulta e a leitura dos dados, mas não a renderização ou a exportação da planilha.</p>
+            }
+            @if (erroDiagnostico is not null)
+            {
+                <p class="text-warning-emphasis mb-0">@erroDiagnostico</p>
+            }
+        </div>
+    </section>
+}
+
 @code {
     private static readonly CultureInfo cultura = CultureInfo.GetCultureInfo("pt-BR");
     private string empresa = "Winthor";
@@ -123,6 +155,20 @@
     private string? erro;
     private bool ocupado;
     private bool consultado;
+    private string? extracaoId;
+    private DiagnosticoConsulta? diagnosticoConsulta;
+    private string? erroDiagnostico;
+
+    private sealed record AmostraProcesso(DateTimeOffset Instante, TimeSpan Cpu, long MemoriaPrivada, long WorkingSet);
+    private sealed record DiagnosticoConsulta(AmostraProcesso Inicio, AmostraProcesso Fim, TimeSpan Duracao, TimeSpan Cpu, double CpuPercentual, string Resultado);
+
+    private static string EmMebibytes(long bytes) => (bytes / 1048576d).ToString("N2", cultura);
+
+    private void FecharDiagnostico()
+    {
+        diagnosticoConsulta = null;
+        erroDiagnostico = null;
+    }
 
     private void LimparResultado()
     {
@@ -130,6 +176,8 @@
         inexistentes = [];
         erro = null;
         consultado = false;
+        extracaoId = null;
+        FecharDiagnostico();
     }
 
     private async Task ConsultarAsync()
@@ -173,15 +221,26 @@
 
         ocupado = true;
         StateHasChanged();
+        extracaoId = Guid.NewGuid().ToString("N");
+        using var escopo = Logger.BeginScope("ExtracaoId={ExtracaoId} CircuitoId={CircuitoId}", extracaoId, MonitorCircuito.Id);
+        var cronometro = Stopwatch.StartNew();
+        var resultado = "Erro";
+#if DEBUG
+        var inicio = CapturarAmostraProcesso();
+#endif
         try
         {
             var servidor = new ServidorDto { Descricao = "Winthor", Ip = host.Trim(), Ativo = true };
             inexistentes = await ExtracaoService.ObterNumerosVendasInexistentesAsync(servidor, numeros);
             if (inexistentes.Count > 0)
+            {
+                resultado = "VendasInexistentes";
                 return;
+            }
 
             itens = await ExtracaoService.ExtrairItensVendasPorEcfAsync(servidor, numeros);
             consultado = true;
+            resultado = "Sucesso";
         }
         catch (Exception ex)
         {
@@ -190,9 +249,45 @@
         }
         finally
         {
+            cronometro.Stop();
+#if DEBUG
+            if (inicio is not null && CapturarAmostraProcesso() is { } fim)
+            {
+                var cpu = fim.Cpu - inicio.Cpu;
+                var percentual = cronometro.Elapsed.TotalMilliseconds > 0
+                    ? cpu.TotalMilliseconds / cronometro.Elapsed.TotalMilliseconds / Environment.ProcessorCount * 100
+                    : 0;
+                diagnosticoConsulta = new DiagnosticoConsulta(inicio, fim, cronometro.Elapsed, cpu, percentual, resultado switch
+                {
+                    "Sucesso" => "Consulta concluída",
+                    "VendasInexistentes" => "Vendas não encontradas ou canceladas",
+                    _ => "Consulta interrompida por erro"
+                });
+            }
+#endif
+            Logger.LogInformation("Desempenho consulta: extracaoId={ExtracaoId}, circuitoId={CircuitoId}, vendas={QuantidadeVendas}, itens={QuantidadeItens}, inexistentes={QuantidadeInexistentes}, duracaoMs={DuracaoMs}, resultado={Resultado}",
+                extracaoId, MonitorCircuito.Id, numeros.Count, itens.Count, inexistentes.Count, cronometro.Elapsed.TotalMilliseconds, resultado);
             ocupado = false;
         }
     }
+
+#if DEBUG
+    private AmostraProcesso? CapturarAmostraProcesso()
+    {
+        try
+        {
+            using var processo = Process.GetCurrentProcess();
+            processo.Refresh();
+            return new AmostraProcesso(DateTimeOffset.Now, processo.TotalProcessorTime, processo.PrivateMemorySize64, processo.WorkingSet64);
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception or NotSupportedException)
+        {
+            Logger.LogWarning(ex, "Não foi possível medir os recursos do processo durante a consulta.");
+            erroDiagnostico = "Não foi possível medir os recursos do processo. Consulte os registros da aplicação.";
+            return null;
+        }
+    }
+#endif
 
     private async Task ExportarAsync()
     {
@@ -211,15 +306,31 @@
 
         ocupado = true;
         erro = null;
+        var id = extracaoId;
+        var quantidadeItens = itens.Count;
+        using var escopo = Logger.BeginScope("ExtracaoId={ExtracaoId} CircuitoId={CircuitoId}", id, MonitorCircuito.Id);
+        var cronometro = Stopwatch.StartNew();
+        double? geracaoMs = null;
+        double? transferenciaMs = null;
+        var tamanhoBytes = 0;
+        var sucesso = false;
+        RegistrarMemoria("AntesExportacao", id);
         try
         {
             var nomeComplemento = string.Join("_", complemento.Trim().Split(Path.GetInvalidFileNameChars()));
             var nome = $"{nomeComplemento}_Winthor_{dataArquivo.Value.ToString("dd.MM.yyyy", CultureInfo.InvariantCulture)}.xls";
+            var etapa = Stopwatch.StartNew();
             var bytes = ExtracaoService.GerarPlanilhaExcel(itens);
+            geracaoMs = etapa.Elapsed.TotalMilliseconds;
+            tamanhoBytes = bytes.Length;
+            RegistrarMemoria("DepoisGeracao", id);
             using var stream = new MemoryStream(bytes);
             using var streamReference = new DotNetStreamReference(stream);
+            etapa.Restart();
             await using var module = await JS.InvokeAsync<IJSObjectReference>("import", "./js/extracao-vendas.js");
             await module.InvokeVoidAsync("baixarPlanilha", nome, streamReference);
+            transferenciaMs = etapa.Elapsed.TotalMilliseconds;
+            sucesso = true;
 
             empresa = string.Empty;
             dataArquivo = null;
@@ -234,7 +345,24 @@
         }
         finally
         {
+            RegistrarMemoria("FimExportacao", id);
+            Logger.LogInformation("Desempenho exportacao: extracaoId={ExtracaoId}, circuitoId={CircuitoId}, itens={QuantidadeItens}, bytes={TamanhoBytes}, geracaoMs={GeracaoMs}, transferenciaMs={TransferenciaMs}, duracaoMs={DuracaoMs}, sucesso={Sucesso}",
+                id, MonitorCircuito.Id, quantidadeItens, tamanhoBytes, geracaoMs, transferenciaMs, cronometro.Elapsed.TotalMilliseconds, sucesso);
             ocupado = false;
+        }
+    }
+
+    private void RegistrarMemoria(string etapa, string? id)
+    {
+        try
+        {
+            using var processo = Process.GetCurrentProcess();
+            Logger.LogInformation("Memoria exportacao: extracaoId={ExtracaoId}, circuitoId={CircuitoId}, etapa={Etapa}, processoId={ProcessoId}, memoriaPrivadaBytes={MemoriaPrivadaBytes}, workingSetBytes={WorkingSetBytes}, gerenciadaBytes={GerenciadaBytes}",
+                id, MonitorCircuito.Id, etapa, processo.Id, processo.PrivateMemorySize64, processo.WorkingSet64, GC.GetTotalMemory(false));
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception or NotSupportedException)
+        {
+            Logger.LogWarning(ex, "Não foi possível medir a memória do processo na etapa {Etapa}.", etapa);
         }
     }
 }
