@@ -163,6 +163,8 @@ Os logs no nível `Information` incluem:
 | `Memoria exportacao` | Amostras de memória privada, working set e memória gerenciada, em bytes, antes da exportação, após gerar o XLS e no fim. São valores do **processo inteiro**, não de um usuário, e não necessariamente representam o pico. Monitore o processo também externamente. |
 | Eventos de circuito | Abertura, desconexão, reconexão e encerramento, com duração de vida e, quando aplicável, duração observada da desconexão até reconexão ou encerramento. Não medem diretamente o tempo de download. |
 
+Em compilações **Debug**, ao terminar a consulta, a página também apresenta um painel com o resultado, os horários de início e fim, o tempo decorrido, o tempo de CPU e a CPU média normalizada pelos processadores lógicos, além da memória privada e residente no início e no fim. O painel também aparece se a consulta for interrompida por erro ou se houver vendas inexistentes. CPU e memória abrangem o processo servidor inteiro, inclusive outras atividades e usuários, e as amostras de memória não são necessariamente picos. A duração não inclui a renderização nem a geração ou o download da planilha. Em compilações Release o painel não é exibido; selecionar o ambiente Development, por si só, não o habilita.
+
 ### Coleta dos registros
 
 Os registros da página incluem `extracaoId` e `circuitoId` aleatórios. Para correlacionar os registros Oracle com a extração no console, habilite a exibição de escopos do provedor de console antes de iniciar a aplicação, por exemplo no PowerShell:
