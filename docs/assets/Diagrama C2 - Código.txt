@@ -1,0 +1,61 @@
+@startuml C4_Nivel2_Conteineres_Sistema_Continental_Winthor
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+
+LAYOUT_WITH_LEGEND()
+
+title <size:16><b>Diagrama C4 (Nível 2 - Contêineres) — Sistema Continental & ERP Winthor</b></size>\n<size:12>Arquitetura de Contêineres com detalhamento do ERP Winthor Legado/Existente</size>
+
+' Atores
+Person_Ext(comercial, "Analista Comercial", "Insere pedidos, extrai a planilha, insere preços de loja e envia para a carga noturna.")
+Person_Ext(financeiro, "Analista Financeiro", "Realiza a conciliação bancária e fiscal dos pedidos faturados pela Matriz.")
+Person(dba, "Desenvolvedor / DBA", "Gerencia permissões de banco, VPN e monitora a integridade do ecossistema.")
+
+' ==============================================================================
+' NOVO SISTEMA: SISTEMA CONTINENTAL
+' ==============================================================================
+System_Boundary(c_continental, "Sistema Continental (Nova Aplicação Web)") {
+    Container(blazor_ui, "Interface Web Reativa (UI)", "C# .NET 10, Blazor Server, Bootstrap", "Interface self-service para seleção da loja (Fantasy Matriz), entrada de múltiplos pedidos e acionamento de download.")
+    
+    Container(vendas_repo, "Repositório de Vendas (Data Access)", "C# .NET 10, Oracle.ManagedDataAccess.Core", "Gerencia abertura de conexão assíncrona, parametriza a cláusula IN (:pedidos) e mapeia dados para VendaItemDto.")
+    
+    Container(excel_service, "Motor de Geração Excel", "C# .NET 10, ClosedXML / NPOI", "Monta a planilha em memória (MemoryStream), aplica estilização institucional e formata valores monetários.")
+}
+
+' ==============================================================================
+' SISTEMA EXISTENTE: ERP WINTHOR (MATRIZ)
+' ==============================================================================
+System_Boundary(c_winthor, "ERP Winthor (Ambiente Existente - Matriz)") {
+    Container_Ext(winthor_app, "Módulos Desktop Winthor", "Aplicações Desktop ERP Winthor", "Módulos de faturamento, vendas e financeiro utilizados pela operação da Matriz.")
+    
+    ContainerDb_Ext(oracle_db, "Banco de Dados Central (Oracle Database)", "Oracle 19c/21c (PCPEDC, PCPEDI, PCPRODUT)", "Armazena cabeçalhos de pedidos (PCPEDC), itens faturados (PCPEDI) e cadastro de produtos com custo financeiro (PCPRODUT).")
+    
+    Container_Ext(batch_job, "Rotina Batch Noturna de Estoque/Preço", "Executável / Job Batch Winthor", "Rotina automatizada noturna que lê o arquivo .xls gerado e atualiza tabelas de saldo de estoque e preço de venda.")
+}
+
+' ==============================================================================
+' RELACIONAMENTOS E FLUXOS DE INTEGRAÇÃO
+' ==============================================================================
+
+' Usuários -> Sistema Continental
+Rel(comercial, blazor_ui, "Informa números de pedidos e solicita exportação", "HTTPS / WebSocket (SignalR)")
+Rel(dba, blazor_ui, "Acessa para validação de integridade operacional", "HTTPS")
+
+' Internos do Sistema Continental
+Rel(blazor_ui, vendas_repo, "Solicita itens dos pedidos informados", "Chamada de Método Assíncrono (C#)")
+Rel_Back(blazor_ui, vendas_repo, "Retorna coleção tipada List<VendaItemDto>", "Memória")
+
+Rel(blazor_ui, excel_service, "Encaminha lista de DTOs para formatação", "Chamada de Método (C#)")
+Rel_Back(blazor_ui, excel_service, "Retorna array de bytes (.xls / .xlsx)", "byte[] / MemoryStream")
+
+' Sistema Continental -> ERP Winthor (Banco Oracle via VPN)
+Rel(vendas_repo, oracle_db, "Executa query parametrizada com agrupamento e NVL", "TCP/IP (Porta 1521 via VPN Corporativa)")
+
+' Usuários -> ERP Winthor
+Rel(financeiro, winthor_app, "Realiza conciliação contábil no módulo Contas a Receber", "Protocolo de Rede Proprietário")
+Rel(winthor_app, oracle_db, "Grava transações comerciais e financeiras", "Conexão Direta SQL/Net")
+
+' Fechamento do Ciclo com a Rotina Noturna
+Rel(comercial, batch_job, "Disponibiliza planilha preenchida com preços de loja", "Cópia para Pasta de Rede Compartilhada")
+Rel(batch_job, oracle_db, "Atualiza tabelas de estoque e tabela de preços das lojas parceiras", "Batch SQL / Triggers")
+
+@enduml

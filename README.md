@@ -23,6 +23,7 @@ O problema, os requisitos de negócio e as metas aqui descritas estão alinhados
 - [Testes](#testes)
 - [Medição de desempenho](#medição-de-desempenho-da-extração)
 - [Segurança antes de implantar](#segurança-antes-de-implantar)
+- [Documentação de arquitetura](#documentação-de-arquitetura)
 - [Documento do Projeto Aplicado](#documento-do-projeto-aplicado)
 
 ---
@@ -56,6 +57,8 @@ A planilha contém as colunas `PRO_CODIGO`, `COD_R3MAGAZINE`, `PRO_DESCRICAO`, `
 ## Arquitetura
 
 A solução é implementada em **Blazor Server com renderização interativa no servidor** e organiza responsabilidades em projetos separados, seguindo uma arquitetura em camadas inspirada nos princípios de DDD. A separação facilita a evolução e os testes das regras sem acoplar a interface diretamente ao acesso a dados.
+
+Para a visão detalhada de componentes, integrações, segurança, decisões e limitações, consulte o [Documento de Arquitetura de Software (DAS)](docs/DAS.md) e os [diagramas C4](#documentação-de-arquitetura).
 
 | Projeto | Responsabilidade |
 | --- | --- |
@@ -189,6 +192,18 @@ Configure a coleta e retenção dos logs no ambiente de homologação, sem regis
 - Revise `src/ContinentalSistemas.App/Program.cs`: a configuração atual cria o usuário inicial `Master` com uma senha definida no código. Remova essa credencial fixa e implemente um provisionamento seguro antes de implantar; se a senha já foi usada, altere-a.
 - Conceda ao usuário Oracle somente as permissões estritamente necessárias para as consultas de leitura.
 - Use TLS, controles de acesso e políticas de retenção adequados ao ambiente e aos dados corporativos.
+
+## Documentação de arquitetura
+
+Os documentos e diagramas estão disponíveis na pasta [`docs`](docs):
+
+| Documento | Conteúdo |
+| --- | --- |
+| [Documento de Arquitetura de Software (DAS)](docs/DAS.md) | Contexto, componentes, fluxos, integrações, decisões, segurança e riscos da implementação. |
+| [Diagrama C4 nível 1 — contexto](docs/Diagrama%20C1.svg) · [código-fonte PlantUML](docs/Diagrama%20C1%20-%20C%C3%B3digo.txt) | Atores, sistema Continental e ERP Winthor no contexto do processo de negócio. |
+| [Diagrama C4 nível 2 — contêineres](docs/Diagrama%20C2.svg) · [código-fonte PlantUML](docs/Diagrama%20C2%20-%20C%C3%B3digo.txt) | Visão dos elementos da aplicação e suas relações com o ambiente Winthor. |
+
+Os diagramas também representam processos externos e detalhes conceituais que não são necessariamente implementados ou validados neste repositório. Para o estado atual do código e suas limitações, consulte o DAS; por exemplo, a aplicação gera `.xls` com NPOI e usa SQL Server para o Identity.
 
 ## Documento do Projeto Aplicado
 

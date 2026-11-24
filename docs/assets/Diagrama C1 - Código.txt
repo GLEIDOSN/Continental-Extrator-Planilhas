@@ -1,0 +1,27 @@
+@startuml C4_Nivel1_Contexto_Sistema
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Context.puml
+
+LAYOUT_WITH_LEGEND()
+
+title <size:16><b>Diagrama C4 (Nível 1 - Contexto) — Sistema Continental & ERP Winthor</b></size>\n<size:12>Fantasy Magazine | Integração de Vendas e Precificação de Lojas Parceiras</size>
+
+' Atores
+Person_Ext(comercial, "Analista Comercial", "Equipe de Precificação responsável pela definição de preços de venda e margens das lojas parceiras.")
+Person_Ext(financeiro, "Analista Financeiro", "Responsável pelo faturamento, conciliação contábil e lançamentos no Contas a Receber.")
+Person(dba, "Desenvolvedor / DBA", "Responsável pela infraestrutura, governança do banco de dados e sustentação da solução.")
+
+' Novo Sistema em Escopo
+System(sistema_continental, "Sistema Continental\n(Exportador de Planilhas)", "Aplicação web em C# (.NET 10) e Blazor Server para consulta self-service de vendas e exportação de planilhas de precificação pré-formatadas (.xls).")
+
+' Sistema Existente (ERP Winthor)
+System_Ext(erp_winthor, "ERP Winthor (Existente)", "Sistema ERP corporativo da Matriz responsável pelo processamento de pedidos, faturamento, estoque central e rotinas batch noturnas.")
+
+' Relacionamentos
+Rel(comercial, sistema_continental, "Informa pedidos de venda e realiza download da planilha", "HTTPS / Navegador Web")
+Rel(financeiro, erp_winthor, "Acompanha faturamento e concilia recebíveis da Fantasy Matriz", "Cliente ERP")
+Rel(dba, sistema_continental, "Monitora métricas, logs e conexão", "HTTPS / Painel Web")
+
+Rel(sistema_continental, erp_winthor, "Extrai dados de pedidos (PCPEDC, PCPEDI) e custos (PCPRODUT)", "TCP/IP 1521 (VPN Corporativa)")
+Rel(comercial, erp_winthor, "Alimenta planilha precificada (.xls) na rotina de carga noturna", "Upload de Arquivo / Pasta de Rede")
+
+@enduml
